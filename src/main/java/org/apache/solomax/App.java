@@ -1,12 +1,16 @@
 package org.apache.solomax;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.apache.openmeetings.db.dao.label.LabelDao.getLabelFileName;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.FileInputStream;
-import java.io.FileWriter;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
 import java.io.Reader;
+import java.io.Writer;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -18,13 +22,22 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
+import java.util.function.Function;
 
 import javax.ws.rs.core.Form;
+import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 
+import org.apache.cxf.ext.logging.LoggingInInterceptor;
+import org.apache.cxf.ext.logging.LoggingOutInterceptor;
+import org.apache.cxf.jaxrs.client.ClientConfiguration;
 import org.apache.cxf.jaxrs.client.WebClient;
+import org.apache.cxf.jaxrs.ext.multipart.Attachment;
+import org.apache.cxf.jaxrs.ext.multipart.ContentDisposition;
+import org.apache.cxf.jaxrs.ext.multipart.MultipartBody;
 import org.apache.cxf.transports.http.configuration.HTTPClientPolicy;
 import org.apache.openmeetings.db.entity.label.StringLabel;
+import org.apache.openmeetings.util.OmFileHelper;
 import org.apache.openmeetings.util.XmlExport;
 import org.apache.wicket.util.string.Strings;
 import org.dom4j.Document;
@@ -45,24 +58,54 @@ public class App {
 	private static final String API_BASE = "https://api.poeditor.com/v2/";
 	private static final String PROJECT_ID = "333773";
 	private static final String MODE_PUT = "put";
+	private static final String MODE_LIST = "list";
 	public static final long TIMEOUT = 5 * 60 * 1000;
 	private static Logger log = LoggerFactory.getLogger(App.class);
 
-	private static JSONObject post(String path, String token, Form params) {
-		WebClient c = WebClient.create(API_BASE)
-				.accept("application/json");
+	private static Attachment newAttachment(String name, String val) {
+		return new Attachment(
+				name
+				, new ByteArrayInputStream(val.getBytes(UTF_8))
+				, new ContentDisposition("form-data; name=\"" + name + "\";"));
+	}
+
+	private static JSONObject post(String path, Function<WebClient, Response> func) {
+		WebClient c = WebClient.create(API_BASE).accept(MediaType.APPLICATION_JSON);
 		HTTPClientPolicy p = WebClient.getConfig(c).getHttpConduit().getClient();
 		p.setConnectionTimeout(TIMEOUT);
 		p.setReceiveTimeout(TIMEOUT);
-		Response resp = c.path(path)
-				.post(params.param("id", PROJECT_ID).param("api_token", token));
+
+		ClientConfiguration config = WebClient.getConfig(c);
+		config.getInInterceptors().add(new LoggingInInterceptor());
+		config.getOutInterceptors().add(new LoggingOutInterceptor());
+
+		Response resp = func.apply(c.path(path));
 
 		String jsonStr = resp.readEntity(String.class);
 		if (200 != resp.getStatus()) {
 			log.error("Fail to call {} -> {}", path, jsonStr);
 			System.exit(1);
 		}
-		return new JSONObject(jsonStr).getJSONObject("result");
+		JSONObject result = new JSONObject(jsonStr);
+		JSONObject response = result.getJSONObject("response");
+		if ("fail".equals(response.getString("status"))) {
+			log.error("call to {} was unsuccessful {}", path, jsonStr);
+			System.exit(1);
+		}
+		return result.getJSONObject("result");
+	}
+
+	private static JSONObject post(String path, String token, MultipartBody body) {
+		return post(path, c -> {
+			c.type(MediaType.MULTIPART_FORM_DATA);
+			body.getAllAttachments().add(newAttachment("api_token", token));
+			body.getAllAttachments().add(newAttachment("id", PROJECT_ID));
+			return c.post(body);
+		});
+	}
+
+	private static JSONObject post(String path, String token, Form params) {
+		return post(path, c -> c.post(params.param("id", PROJECT_ID).param("api_token", token)));
 	}
 
 	private static Properties load(Path folder, String fileName) {
@@ -76,9 +119,7 @@ public class App {
 	}
 
 	private static Properties load(String token, String code) throws Exception {
-		JSONObject translation = post("projects/export", token, new Form()
-				.param("language", code)
-				.param("type", "properties"));
+		JSONObject translation = post("projects/export", token, new Form().param("language", code).param("type", "properties"));
 		URL url = new URL(translation.getString("url"));
 		try (InputStream is = url.openStream(); Reader r = new InputStreamReader(is, StandardCharsets.UTF_8)) {
 			Properties props = new Properties();
@@ -94,9 +135,9 @@ public class App {
 	private static void save(Path path, String inCode, Properties lang, Properties eng) throws Exception {
 		List<StringLabel> labels = new ArrayList<>();
 		eng.forEach((inKey, value) -> {
-			String key = (String)inKey;
+			String key = (String) inKey;
 			if (Strings.isEmpty(lang.getProperty(key))) {
-				labels.add(new StringLabel(key, (String)value));
+				labels.add(new StringLabel(key, (String) value));
 			} else {
 				labels.add(new StringLabel(key, lang.getProperty(key)));
 			}
@@ -126,39 +167,76 @@ public class App {
 		XmlExport.toXml(path.resolve(getLabelFileName(l)).toFile(), d);
 	}
 
+	private static void send(String token, String fileName, String engName, Properties eng, Properties props) {
+		try (ByteArrayOutputStream os = new ByteArrayOutputStream(100_000);
+				Writer writer = new OutputStreamWriter(os, StandardCharsets.UTF_8);) {
+			if (!engName.equals(fileName)) {
+				for (Iterator<Map.Entry<Object, Object>> iter = props.entrySet().iterator(); iter.hasNext();) {
+					Map.Entry<Object, Object> e = iter.next();
+					if (eng.getProperty((String) e.getKey()).equals(e.getValue())) {
+						iter.remove();
+					}
+				}
+			}
+			props.store(writer, "Apache OpenMeetings language file");
+			String fname = OmFileHelper.getFileName(OmFileHelper.getFileName(fileName)); // *.properties.xml
+			String langCode = "en";
+			if (fname.indexOf("_") > 0) {
+				langCode = fname.substring(fname.indexOf("_") + 1).replaceAll("_", "-");
+				if (langCode.equals("zh-CN")) {
+					langCode = "zh-Hans";
+				} else if (langCode.equals("zh-TW")) {
+					langCode = "zh-Hant";
+				} else if (langCode.equals("iw")) {
+					langCode = "he";
+				} else if (langCode.equals("in")) {
+					langCode = "id";
+				}
+			}
+
+			List<Attachment> atts = new ArrayList<>();
+			atts.add(new Attachment("file", new ByteArrayInputStream(os.toByteArray()),
+					new ContentDisposition("form-data; name=\"file\";filename=\"app.properties\"")));
+			atts.add(newAttachment("updating", "terms_translations"));
+			atts.add(newAttachment("language", langCode));
+			atts.add(newAttachment("overwrite", "1"));
+			atts.add(newAttachment("sync_terms", engName.equals(fileName) ? "1" : "0"));
+			JSONObject result = post("projects/upload", token, new MultipartBody(atts));
+			log.error("{} -> {}", langCode, result);
+			Thread.sleep(60_000);
+		} catch (Exception e) {
+			log.error("Unexpected exception while sending", e);
+			System.exit(1);
+		}
+	}
+
 	public static void main(String[] args) throws Exception {
-		System.out.println("Usage: .token om-src-root mode");
+		log.info("Usage: .token om-src-root [mode]");
+		log.info("mode can be '-empty-', 'put', 'list'");
 		if (args.length < 2) {
 			return;
 		}
 		String token = Files.readString(Path.of(args[0])).trim();
 
 		Path srcRoot = Path.of(args[1], "openmeetings-web/src/main/java/org/apache/openmeetings/web/app");
-		if (args.length > 2 && MODE_PUT.equalsIgnoreCase(args[2])) {
-			String engName = "Application.properties.xml";
+		if (args.length > 2 && MODE_LIST.equalsIgnoreCase(args[2])) {
+			JSONObject result = post("languages/list", token, new Form());
+			JSONArray langs = result.getJSONArray("languages");
+			for (int i = 0; i < langs.length(); ++i) {
+				JSONObject o = langs.getJSONObject(i);
+				log.info("\t{} -> {}", o.getString("name"), o.getString("code"));
+			}
+		} else if (args.length > 2 && MODE_PUT.equalsIgnoreCase(args[2])) {
+			String engName = getLabelFileName(Locale.ENGLISH);
 			Properties eng = load(srcRoot, engName);
-			Files.list(srcRoot)
-				.filter(path -> path.toString().endsWith(".xml"))
-				.forEach(path -> {
-					String fileName = path.getFileName().toString();
-					Properties props = load(srcRoot, fileName);
-					String outFileName = fileName.substring(0, fileName.length() - 4);
-					Path outPath = Path.of(args[2], outFileName);
-					try (FileWriter fw = new FileWriter(outPath.toFile(), StandardCharsets.UTF_8, false))
-					{
-						if (fileName != engName) {
-							for (Iterator<Map.Entry<Object, Object>> iter = props.entrySet().iterator(); iter.hasNext();) {
-								Map.Entry<Object, Object> e = iter.next();
-								if (eng.getProperty((String)e.getKey()).equals(e.getValue())) {
-									iter.remove();
-								}
-							}
-						}
-						props.store(fw, "Apache OpenMeetings language file");
-					} catch (Exception e) {
-						e.printStackTrace();
-					}
-				});
+			send(token, engName, engName, eng, eng);
+			Files.list(srcRoot).filter(path -> path.toString().endsWith(".xml")).forEach(path -> {
+				String fileName = path.getFileName().toString();
+				Properties props = load(srcRoot, fileName);
+				if (fileName != engName) {
+					send(token, fileName, engName, eng, props);
+				}
+			});
 		} else {
 			Properties langEng = load(token, "en");
 			JSONObject json = post("languages/list", token, new Form());
