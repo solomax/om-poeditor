@@ -233,7 +233,7 @@ public class App {
 			Files.list(srcRoot).filter(path -> path.toString().endsWith(".xml")).forEach(path -> {
 				String fileName = path.getFileName().toString();
 				Properties props = load(srcRoot, fileName);
-				if (fileName != engName) {
+				if (!engName.equals(fileName)) {
 					send(token, fileName, engName, eng, props);
 				}
 			});
