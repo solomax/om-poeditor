@@ -213,6 +213,7 @@ public class App {
 	public static void main(String[] args) throws Exception {
 		log.info("Usage: .token om-src-root [mode]");
 		log.info("mode can be '-empty-', 'put', 'list'");
+		log.info("Specific language can be specified after 'put', for ex. 'ar'");
 		if (args.length < 2) {
 			return;
 		}
@@ -229,14 +230,22 @@ public class App {
 		} else if (args.length > 2 && MODE_PUT.equalsIgnoreCase(args[2])) {
 			String engName = getLabelFileName(Locale.ENGLISH);
 			Properties eng = load(srcRoot, engName);
-			send(token, engName, engName, eng, eng);
-			Files.list(srcRoot).filter(path -> path.toString().endsWith(".xml")).forEach(path -> {
-				String fileName = path.getFileName().toString();
-				Properties props = load(srcRoot, fileName);
-				if (!engName.equals(fileName)) {
+			if (args.length > 3) {
+				Files.list(srcRoot).filter(path -> path.toString().endsWith("_" + args[3] + ".properties.xml")).findFirst().ifPresentOrElse(path -> {
+					String fileName = path.getFileName().toString();
+					Properties props = load(srcRoot, fileName);
 					send(token, fileName, engName, eng, props);
-				}
-			});
+				}, () -> System.err.println("Language file for '" + args[3] + "' locale not found"));
+			} else {
+				send(token, engName, engName, eng, eng);
+				Files.list(srcRoot).filter(path -> path.toString().endsWith(".xml")).forEach(path -> {
+					String fileName = path.getFileName().toString();
+					Properties props = load(srcRoot, fileName);
+					if (!engName.equals(fileName)) {
+						send(token, fileName, engName, eng, props);
+					}
+				});
+			}
 		} else {
 			Properties langEng = load(token, "en");
 			JSONObject json = post("languages/list", token, new Form());

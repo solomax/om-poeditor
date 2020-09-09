@@ -14,3 +14,7 @@
 `mvn exec:java -Dexec.args="~/.token ${OM_SOURCES}/ put"`
 
 <span style="color: red;"><strong>NOTE: all translation will be overwritten, it will take significant time</strong></span>
+
+## Upload only one language file to POEditor
+`mvn exec:java -Dexec.args="~/.token ${OM_SOURCES}/ put ar"`
+
