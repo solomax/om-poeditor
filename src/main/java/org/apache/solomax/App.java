@@ -136,11 +136,9 @@ public class App {
 		List<StringLabel> labels = new ArrayList<>();
 		eng.forEach((inKey, value) -> {
 			String key = (String) inKey;
-			if (Strings.isEmpty(lang.getProperty(key))) {
-				labels.add(new StringLabel(key, (String) value));
-			} else {
-				labels.add(new StringLabel(key, lang.getProperty(key)));
-			}
+			String oVal = lang.getProperty(key);
+			String val = Strings.isEmpty(oVal) ? (String) value : oVal;
+			labels.add(new StringLabel(key, val.replace("''", "'")));
 		});
 		String code = inCode;
 		if ("zh-Hans".equals(inCode)) {
