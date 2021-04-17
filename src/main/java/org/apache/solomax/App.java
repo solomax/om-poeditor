@@ -59,7 +59,8 @@ public class App {
 	private static final String PROJECT_ID = "333773";
 	private static final String MODE_PUT = "put";
 	private static final String MODE_LIST = "list";
-	public static final long TIMEOUT = 5 * 60 * 1000;
+	public static final long TIMEOUT = 50 * 1000; // connection timeout 50sec
+	public static final long REQ_TIMEOUT = 30 * 1000; // 30sec
 	private static Logger log = LoggerFactory.getLogger(App.class);
 
 	private static Attachment newAttachment(String name, String val) {
@@ -201,11 +202,17 @@ public class App {
 			atts.add(newAttachment("sync_terms", engName.equals(fileName) ? "1" : "0"));
 			JSONObject result = post("projects/upload", token, new MultipartBody(atts));
 			log.error("{} -> {}", langCode, result);
-			Thread.sleep(60_000);
+			sleep();
 		} catch (Exception e) {
 			log.error("Unexpected exception while sending", e);
 			System.exit(1);
 		}
+	}
+
+	private static void sleep() throws InterruptedException {
+		log.info("... going to sleep for {} seconds", REQ_TIMEOUT / 1000);
+		Thread.sleep(REQ_TIMEOUT);
+		log.info("Done!");
 	}
 
 	public static void main(String[] args) throws Exception {
@@ -253,6 +260,8 @@ public class App {
 				String code = langJson.getString("code");
 				Properties lang = "en".equals(code) ? langEng : load(token, code);
 				save(srcRoot, code, lang, langEng);
+				log.info("Got {} [{}], {}%", langJson.getString("name"), code, langJson.getString("percentage"));
+				sleep();
 			}
 		}
 	}
