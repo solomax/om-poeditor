@@ -60,6 +60,25 @@ public class App {
 	private static final String PROJECT_ID = "333773";
 	private static final String MODE_PUT = "put";
 	private static final String MODE_LIST = "list";
+	private static final String LNG_EN = "en";
+	private static final String LNG_PO_ZH_CN = "zh-Hans";
+	private static final String LNG_ZH_CN = "zh-CN";
+	private static final String LNG_PO_ZH_TW = "zh-Hant";
+	private static final String LNG_ZH_TW = "zh-TW";
+	private static final String LNG_PO_IW = "he";
+	private static final String LNG_IW = "iw";
+	private static final String LNG_PO_IN = "id";
+	private static final String LNG_IN = "in";
+	private static final Map<String, String> LNG_PO_TO_OM = Map.of(
+			LNG_PO_ZH_CN, LNG_ZH_CN
+			, LNG_PO_ZH_TW, LNG_ZH_TW
+			, LNG_PO_IW, LNG_IW
+			, LNG_PO_IN, LNG_IN);
+	private static final Map<String, String> LNG_OM_TO_PO = Map.of(
+			LNG_ZH_CN, LNG_PO_ZH_CN
+			, LNG_ZH_TW, LNG_PO_ZH_TW
+			, LNG_IW, LNG_PO_IW
+			, LNG_IN, LNG_PO_IN);
 	public static final long TIMEOUT = 50 * 1000; // connection timeout 50sec
 	public static final long REQ_TIMEOUT = 30 * 1000; // 30sec
 
@@ -141,12 +160,7 @@ public class App {
 			String val = Strings.isEmpty(oVal) ? (String) value : oVal;
 			labels.add(new StringLabel(key, val.replace("''", "'")));
 		});
-		String code = inCode;
-		if ("zh-Hans".equals(inCode)) {
-			code = "zh-CN";
-		} else if ("zh-Hant".equals(inCode)) {
-			code = "zh-TW";
-		}
+		String code = LNG_PO_TO_OM.getOrDefault(inCode, inCode);
 		Locale l = Locale.forLanguageTag(code);
 		Document d = XmlExport.createDocument();
 		Element r = XmlExport.createRoot(d);
@@ -179,18 +193,10 @@ public class App {
 			}
 			props.store(writer, "Apache OpenMeetings language file");
 			String fname = OmFileHelper.getFileName(OmFileHelper.getFileName(fileName)); // *.properties.xml
-			String langCode = "en";
+			String langCode = LNG_EN;
 			if (fname.indexOf("_") > 0) {
 				langCode = fname.substring(fname.indexOf("_") + 1).replaceAll("_", "-");
-				if (langCode.equals("zh-CN")) {
-					langCode = "zh-Hans";
-				} else if (langCode.equals("zh-TW")) {
-					langCode = "zh-Hant";
-				} else if (langCode.equals("iw")) {
-					langCode = "he";
-				} else if (langCode.equals("in")) {
-					langCode = "id";
-				}
+				langCode = LNG_OM_TO_PO.getOrDefault(langCode, langCode);
 			}
 
 			List<Attachment> atts = new ArrayList<>();
@@ -252,13 +258,13 @@ public class App {
 				});
 			}
 		} else {
-			Properties langEng = load(token, "en");
+			Properties langEng = load(token, LNG_EN);
 			JSONObject json = post("languages/list", token, new Form());
 			JSONArray languages = json.getJSONArray("languages");
 			for (int i = 0; i < languages.length(); ++i) {
 				JSONObject langJson = languages.getJSONObject(i);
 				String code = langJson.getString("code");
-				Properties lang = "en".equals(code) ? langEng : load(token, code);
+				Properties lang = LNG_EN.equals(code) ? langEng : load(token, code);
 				save(srcRoot, code, lang, langEng);
 				log.warn("Got {} [{}], {}%{}{}", langJson.getString("name"), code, langJson.getString("percentage"), System.lineSeparator(), System.lineSeparator());
 				sleep();
