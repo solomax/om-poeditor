@@ -53,6 +53,7 @@ import com.github.openjson.JSONObject;
  *
  */
 public class App {
+	private static Logger log = LoggerFactory.getLogger(App.class);
 	private static final String ENTRY_ELEMENT = "entry"; //FIXME TODO make it public in LabelDao
 	private static final String KEY_ATTR = "key"; //FIXME TODO make it public in LabelDao
 	private static final String API_BASE = "https://api.poeditor.com/v2/";
@@ -61,7 +62,6 @@ public class App {
 	private static final String MODE_LIST = "list";
 	public static final long TIMEOUT = 50 * 1000; // connection timeout 50sec
 	public static final long REQ_TIMEOUT = 30 * 1000; // 30sec
-	private static Logger log = LoggerFactory.getLogger(App.class);
 
 	private static Attachment newAttachment(String name, String val) {
 		return new Attachment(
@@ -218,7 +218,7 @@ public class App {
 	public static void main(String[] args) throws Exception {
 		log.info("Usage: .token om-src-root [mode]");
 		log.info("mode can be '-empty-', 'put', 'list'");
-		log.info("Specific language can be specified after 'put', for ex. 'ar'");
+		log.info("Specific language can be specified after 'put', for ex. 'ar'{}{}", System.lineSeparator(), System.lineSeparator());
 		if (args.length < 2) {
 			return;
 		}
@@ -240,7 +240,7 @@ public class App {
 					String fileName = path.getFileName().toString();
 					Properties props = load(srcRoot, fileName);
 					send(token, fileName, engName, eng, props);
-				}, () -> System.err.println("Language file for '" + args[3] + "' locale not found"));
+				}, () -> log.error("Language file for '" + args[3] + "' locale not found"));
 			} else {
 				send(token, engName, engName, eng, eng);
 				Files.list(srcRoot).filter(path -> path.toString().endsWith(".xml")).forEach(path -> {
@@ -260,7 +260,7 @@ public class App {
 				String code = langJson.getString("code");
 				Properties lang = "en".equals(code) ? langEng : load(token, code);
 				save(srcRoot, code, lang, langEng);
-				log.info("Got {} [{}], {}%", langJson.getString("name"), code, langJson.getString("percentage"));
+				log.warn("Got {} [{}], {}%{}{}", langJson.getString("name"), code, langJson.getString("percentage"), System.lineSeparator(), System.lineSeparator());
 				sleep();
 			}
 		}
