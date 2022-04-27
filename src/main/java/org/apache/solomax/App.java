@@ -177,7 +177,9 @@ public class App {
 		for (StringLabel sl : labels) {
 			r.addElement(ENTRY_ELEMENT).addAttribute(KEY_ATTR, sl.getKey()).addCDATA(sl.getValue());
 		}
-		XmlExport.toXml(path.resolve(getLabelFileName(l)).toFile(), d);
+		final String fName = getLabelFileName(l);
+		log.debug("Got lang '{}'->'{}', locale: {}, resulting file: {}", inCode, code, l, fName);
+		XmlExport.toXml(path.resolve(fName).toFile(), d);
 	}
 
 	private static void send(String token, String fileName, String engName, Properties eng, Properties props) {
