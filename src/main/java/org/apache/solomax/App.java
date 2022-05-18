@@ -65,20 +65,12 @@ public class App {
 	private static final String LNG_ZH_CN = "zh-CN";
 	private static final String LNG_PO_ZH_TW = "zh-Hant";
 	private static final String LNG_ZH_TW = "zh-TW";
-	private static final String LNG_PO_IW = "he";
-	private static final String LNG_IW = "iw";
-	private static final String LNG_PO_IN = "id";
-	private static final String LNG_IN = "in";
 	private static final Map<String, String> LNG_PO_TO_OM = Map.of(
 			LNG_PO_ZH_CN, LNG_ZH_CN
-			, LNG_PO_ZH_TW, LNG_ZH_TW
-			, LNG_PO_IW, LNG_IW
-			, LNG_PO_IN, LNG_IN);
+			, LNG_PO_ZH_TW, LNG_ZH_TW);
 	private static final Map<String, String> LNG_OM_TO_PO = Map.of(
 			LNG_ZH_CN, LNG_PO_ZH_CN
-			, LNG_ZH_TW, LNG_PO_ZH_TW
-			, LNG_IW, LNG_PO_IW
-			, LNG_IN, LNG_PO_IN);
+			, LNG_ZH_TW, LNG_PO_ZH_TW);
 	public static final long TIMEOUT = 50 * 1000; // connection timeout 50sec
 	public static final long REQ_TIMEOUT = 30 * 1000; // 30sec
 
