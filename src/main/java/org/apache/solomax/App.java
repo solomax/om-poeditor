@@ -48,10 +48,6 @@ import org.slf4j.LoggerFactory;
 import com.github.openjson.JSONArray;
 import com.github.openjson.JSONObject;
 
-/**
- * Hello world!
- *
- */
 public class App {
 	private static Logger log = LoggerFactory.getLogger(App.class);
 	private static final String ENTRY_ELEMENT = "entry"; //FIXME TODO make it public in LabelDao
